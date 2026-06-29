@@ -10,14 +10,11 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"os/exec"
 	"time"
 
-	"github.com/blang/semver"
 	"github.com/genkiroid/cert"
 	"github.com/go-ping/ping"
-	"github.com/p14yground/go-github-selfupdate/selfupdate"
 	"google.golang.org/grpc"
 
 	"github.com/naiba/nezha/cmd/agent/monitor"
@@ -41,7 +38,6 @@ var (
 
 var (
 	client     pb.NezhaServiceClient
-	updateCh   = make(chan struct{}) // Agent 自动更新间隔
 	httpClient = &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
@@ -85,15 +81,6 @@ func run() {
 	go reportState()
 	// 更新IP信息
 	go monitor.UpdateIP()
-
-	if _, err := semver.Parse(version); err == nil {
-		go func() {
-			for range updateCh {
-				go doSelfUpdate()
-			}
-		}()
-		updateCh <- struct{}{}
-	}
 
 	var err error
 	var conn *grpc.ClientConn
@@ -281,26 +268,6 @@ func reportState() {
 			}
 		}
 		time.Sleep(time.Until(now.Add(time.Second)))
-	}
-}
-
-func doSelfUpdate() {
-	defer func() {
-		time.Sleep(time.Minute * 20)
-		updateCh <- struct{}{}
-	}()
-	v := semver.MustParse(version)
-	println("Check update", v)
-	latest, err := selfupdate.UpdateSelf(v, "naiba/nezha")
-	if err != nil {
-		println("Binary update failed:", err)
-		return
-	}
-	if latest.Version.Equals(v) {
-		println("Current binary is up to date", version)
-	} else {
-		println("Upgrade successfully", latest.Version)
-		os.Exit(1)
 	}
 }
 
